@@ -2,9 +2,12 @@
 import * as cdk from "aws-cdk-lib";
 import { CdkStack } from "../lib/cdk-stack";
 
+const account = process.env.AWS_ACCOUNT_ID;
+const region = process.env.AWS_REGION;
+
 const app = new cdk.App();
 new CdkStack(app, "CdkStack", {
-	env: { account: process.env.AWS_ACCOUNT_ID, region: process.env.AWS_REGION },
+	env: { account, region },
 	/* If you don't specify 'env', this stack will be environment-agnostic.
 	 * Account/Region-dependent features and context lookups will not work,
 	 * but a single synthesized template can be deployed anywhere. */

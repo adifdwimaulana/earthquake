@@ -38,7 +38,7 @@ export class CdkStack extends cdk.Stack {
 
 		// Lambda function
 		const lambdaFn = new lambda.Function(this, "EarthquakeFetcher", {
-			runtime: lambda.Runtime.NODEJS_22_X,
+			runtime: lambda.Runtime.NODEJS_20_X,
 			code: lambda.Code.fromInline(`
 		    exports.handler = async (event) => {
 		      console.log("Event received:", event);
@@ -54,13 +54,13 @@ export class CdkStack extends cdk.Stack {
 
 		// Outputs
 		new cdk.CfnOutput(this, "EarthquakeFetcherOutput", {
-			value: lambdaFn.functionName,
+			value: lambdaFn.functionArn,
 		});
 		new cdk.CfnOutput(this, "EarthquakeTableOutput", {
-			value: earthquakeTable.tableName,
+			value: earthquakeTable.tableArn,
 		});
 		new cdk.CfnOutput(this, "MetadataTableOutput", {
-			value: metadataTable.tableName,
+			value: metadataTable.tableArn,
 		});
 	}
 }
