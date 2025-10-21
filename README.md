@@ -25,6 +25,59 @@
 
 [Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
 
+## Local development
+
+1. Start LocalStack and supporting containers:
+
+	```bash
+	docker-compose up -d
+	```
+
+2. Install dependencies and run the NestJS service:
+
+	```bash
+	pnpm install
+	pnpm start:dev
+	```
+
+3. Deploy the DynamoDB tables (CDK bootstrap + deploy) if you need the infrastructure provisioned automatically:
+
+	```bash
+	pnpm dlx aws-cdk bootstrap
+	pnpm dlx aws-cdk deploy
+	```
+
+The service uses the `.env` file for LocalStack endpoints and table names. Adjust `EARTHQUAKE_SOURCE_URL` if you want to pull a different USGS feed.
+
+## API overview
+
+| Method | Path                       | Description |
+| ------ | -------------------------- | ----------- |
+| `POST` | `/earthquake/ingest`       | Fetches the 100 most recent earthquakes from USGS and upserts them into DynamoDB. |
+| `GET`  | `/earthquake`              | Lists earthquakes with pagination. Filter by `minMagnitude`, `maxMagnitude`, `region`, `startTime`, or `endTime`. |
+| `GET`  | `/earthquake/metrics/requests` | Aggregates captured request logs (`interval=day \| week`) to understand endpoint usage and popular filter combinations. |
+
+Each data-modifying or listing request is captured by the request logging subsystem so that auditing and analytics queries can be performed later.
+
+## DynamoDB data model
+
+### Earthquake table (`Earthquake`)
+
+- **Partition key**: `pk` (constant value `EARTHQUAKE`)
+- **Sort key**: `sk` (event timestamp in milliseconds)
+- **Local secondary index**: `MagnitudeIndex` on attribute `magnitude` to enable range queries by magnitude.
+- **Global secondary index**: `RegionIndex` on `gsi1pk` (`region`) + `sk` for fast region-based lookups.
+
+Stored items include metadata such as magnitude, depth, coordinates, tsunami flag, and derived region. The ingestion workflow retries batch writes and skips malformed entries.
+
+### Request log table (`Metadata`)
+
+- **Partition key**: `pk` (normalized endpoint path)
+- **Sort key**: `sk` (ISO timestamp)
+- **Global secondary index**: `DayIndex` on `dayBucket` for day-level analytics (optional for future extensions).
+
+Request log entries capture query parameters, headers, execution time, response summaries, and are used by the metrics endpoint.
+
 ## Project setup
 
 ```bash

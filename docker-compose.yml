@@ -8,9 +8,10 @@ services:
       - "4566:4566"
     environment:
       - SERVICES=dynamodb,lambda,iam,sts,cloudformation,ssm,logs
-      - AWS_ACCESS_KEY_ID=ACCESS_KEY_ID
-      - AWS_SECRET_ACCESS_KEY=SECRET_ACCESS_KEY
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
       - AWS_REGION=us-east-1
+      - DYNAMODB_SHARE_DB=1
       - DEBUG=1
       - LAMBDA_EXECUTOR=docker
     volumes:

@@ -11,16 +11,39 @@ export class CdkStack extends cdk.Stack {
 		// DynamoDB Tables
 		const earthquakeTable = new dynamodb.Table(this, "Earthquake", {
 			tableName: "Earthquake",
-			partitionKey: { name: "id", type: dynamodb.AttributeType.STRING },
+			partitionKey: { name: "pk", type: dynamodb.AttributeType.STRING },
+			sortKey: { name: "sk", type: dynamodb.AttributeType.NUMBER },
 			billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
 			removalPolicy: cdk.RemovalPolicy.DESTROY,
 		});
 
+		earthquakeTable.addLocalSecondaryIndex({
+			indexName: "MagnitudeIndex",
+			sortKey: { name: "magnitude", type: dynamodb.AttributeType.NUMBER },
+			projectionType: dynamodb.ProjectionType.ALL,
+		});
+
+		earthquakeTable.addGlobalSecondaryIndex({
+			indexName: "RegionIndex",
+			partitionKey: { name: "gsi1pk", type: dynamodb.AttributeType.STRING },
+			sortKey: { name: "sk", type: dynamodb.AttributeType.NUMBER },
+			projectionType: dynamodb.ProjectionType.ALL,
+		});
+
 		const metadataTable = new dynamodb.Table(this, "Metadata", {
 			tableName: "Metadata",
-			partitionKey: { name: "id", type: dynamodb.AttributeType.STRING },
+			partitionKey: { name: "pk", type: dynamodb.AttributeType.STRING },
+			sortKey: { name: "sk", type: dynamodb.AttributeType.STRING },
 			billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
 			removalPolicy: cdk.RemovalPolicy.DESTROY,
+		});
+
+		metadataTable.addGlobalSecondaryIndex({
+			indexName: "DayIndex",
+			partitionKey: { name: "dayBucket", type: dynamodb.AttributeType.STRING },
+			sortKey: { name: "sk", type: dynamodb.AttributeType.STRING },
+			projectionType: dynamodb.ProjectionType.INCLUDE,
+			nonKeyAttributes: ["endpoint", "method", "statusCode"],
 		});
 
 		// IAM role for Lambda
