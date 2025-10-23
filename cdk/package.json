@@ -9,9 +9,9 @@
 		"watch": "tsc -w",
 		"test": "jest",
 		"cdk": "cdk",
-		"local-deploy": "cdklocal deploy --all",
-		"local-synth": "cdklocal synth",
-		"local-bootstrap": "cdklocal bootstrap"
+		"synth:local": "cdklocal synth",
+		"bootstrap:local": "cdklocal bootstrap",
+		"deploy:local": "cdklocal deploy --all --require-approval never"
 	},
 	"devDependencies": {
 		"@types/jest": "^29.5.14",

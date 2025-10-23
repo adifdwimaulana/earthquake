@@ -1,89 +1,39 @@
-import * as cdk from "aws-cdk-lib";
-import * as dynamodb from "aws-cdk-lib/aws-dynamodb";
-import * as iam from "aws-cdk-lib/aws-iam";
-import * as lambda from "aws-cdk-lib/aws-lambda";
-import type { Construct } from "constructs";
+import * as cdk from 'aws-cdk-lib';
+import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
+import type { Construct } from 'constructs';
 
 export class CdkStack extends cdk.Stack {
-	constructor(scope: Construct, id: string, props?: cdk.StackProps) {
-		super(scope, id, props);
+  constructor(scope: Construct, id: string, props?: cdk.StackProps) {
+    super(scope, id, props);
 
-		// DynamoDB Tables
-		const earthquakeTable = new dynamodb.Table(this, "Earthquake", {
-			tableName: "Earthquake",
-			partitionKey: { name: "pk", type: dynamodb.AttributeType.STRING },
-			sortKey: { name: "sk", type: dynamodb.AttributeType.NUMBER },
-			billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
-			removalPolicy: cdk.RemovalPolicy.DESTROY,
-		});
+    const earthquakeTable = new dynamodb.Table(this, 'EarthquakeTable', {
+      tableName: 'earthquake',
+      partitionKey: { name: 'id', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'timestamp', type: dynamodb.AttributeType.NUMBER },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+    });
 
-		earthquakeTable.addLocalSecondaryIndex({
-			indexName: "MagnitudeIndex",
-			sortKey: { name: "magnitude", type: dynamodb.AttributeType.NUMBER },
-			projectionType: dynamodb.ProjectionType.ALL,
-		});
+    earthquakeTable.addGlobalSecondaryIndex({
+      indexName: 'RegionTimeIndex',
+      partitionKey: { name: 'region', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'timestamp', type: dynamodb.AttributeType.NUMBER },
+      projectionType: dynamodb.ProjectionType.ALL,
+    });
 
-		earthquakeTable.addGlobalSecondaryIndex({
-			indexName: "RegionIndex",
-			partitionKey: { name: "gsi1pk", type: dynamodb.AttributeType.STRING },
-			sortKey: { name: "sk", type: dynamodb.AttributeType.NUMBER },
-			projectionType: dynamodb.ProjectionType.ALL,
-		});
+    const logTable = new dynamodb.Table(this, 'LogTable', {
+      tableName: 'logs',
+      partitionKey: { name: 'id', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'timestamp', type: dynamodb.AttributeType.NUMBER },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+    });
 
-		const metadataTable = new dynamodb.Table(this, "Metadata", {
-			tableName: "Metadata",
-			partitionKey: { name: "pk", type: dynamodb.AttributeType.STRING },
-			sortKey: { name: "sk", type: dynamodb.AttributeType.STRING },
-			billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
-			removalPolicy: cdk.RemovalPolicy.DESTROY,
-		});
-
-		metadataTable.addGlobalSecondaryIndex({
-			indexName: "DayIndex",
-			partitionKey: { name: "dayBucket", type: dynamodb.AttributeType.STRING },
-			sortKey: { name: "sk", type: dynamodb.AttributeType.STRING },
-			projectionType: dynamodb.ProjectionType.INCLUDE,
-			nonKeyAttributes: ["endpoint", "method", "statusCode"],
-		});
-
-		// IAM role for Lambda
-		const lambdaRole = new iam.Role(this, "LambdaExecutionRole", {
-			assumedBy: new iam.ServicePrincipal("lambda.amazonaws.com"),
-			managedPolicies: [
-				iam.ManagedPolicy.fromAwsManagedPolicyName(
-					"service-role/AWSLambdaBasicExecutionRole",
-				),
-			],
-		});
-
-		earthquakeTable.grantReadWriteData(lambdaRole);
-		metadataTable.grantReadWriteData(lambdaRole);
-
-		// Lambda function
-		const lambdaFn = new lambda.Function(this, "EarthquakeFetcher", {
-			runtime: lambda.Runtime.NODEJS_20_X,
-			code: lambda.Code.fromInline(`
-		    exports.handler = async (event) => {
-		      console.log("Event received:", event);
-		      return { statusCode: 200, body: JSON.stringify({ message: "OK" }) };
-		    };
-		  `),
-			handler: "index.handler",
-			role: lambdaRole,
-			environment: {
-				TABLE_NAME: earthquakeTable.tableName,
-			},
-		});
-
-		// Outputs
-		new cdk.CfnOutput(this, "EarthquakeFetcherOutput", {
-			value: lambdaFn.functionArn,
-		});
-		new cdk.CfnOutput(this, "EarthquakeTableOutput", {
-			value: earthquakeTable.tableArn,
-		});
-		new cdk.CfnOutput(this, "MetadataTableOutput", {
-			value: metadataTable.tableArn,
-		});
-	}
+    new cdk.CfnOutput(this, 'EarthquakeTableArn', {
+      value: earthquakeTable.tableArn,
+    });
+    new cdk.CfnOutput(this, 'LogTableArn', {
+      value: logTable.tableArn,
+    });
+  }
 }
