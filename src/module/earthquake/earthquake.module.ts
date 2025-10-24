@@ -1,13 +1,13 @@
+import { DynamoDbProvider } from '@/module/dynamo/dynamo.provider';
+import { RequestLogModule } from '@/module/logging/request-log.module';
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { DynamoModule } from '@/module/dynamo/dynamo.module';
-import { RequestLogModule } from '@/module/logging/request-log.module';
 import { EarthquakeController } from './earthquake.controller';
 import { EarthquakeService } from './earthquake.service';
 
 @Module({
-  imports: [ConfigModule, DynamoModule, RequestLogModule],
+  imports: [ConfigModule, RequestLogModule],
   controllers: [EarthquakeController],
-  providers: [EarthquakeService],
+  providers: [EarthquakeService, DynamoDbProvider],
 })
 export class EarthquakeModule {}

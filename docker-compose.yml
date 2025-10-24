@@ -63,7 +63,6 @@ services:
   #     - AWS_ENDPOINT_URL=http://localstack:4566
   #     - AWS_ENDPOINT_URL_S3=http://localstack:4566
   #     - DYNAMODB_ENDPOINT=http://localstack:4566
-  #     - LAMBDA_ENDPOINT=http://localstack:4566
   #   depends_on:
   #     cdk:
   #       condition: service_completed_successfully
