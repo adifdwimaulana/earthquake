@@ -27,7 +27,7 @@ export interface EarthquakeProperties {
   title: string;
 }
 
-export interface EarthquakeItem {
+export interface EarthquakeFeature {
   type: string;
   properties: EarthquakeProperties;
   geometry: {
@@ -51,18 +51,27 @@ export interface USGSMetadata {
 export interface USGSResponse {
   type: string;
   metadata: USGSMetadata;
-  features: EarthquakeItem[];
+  features: EarthquakeFeature[];
   bbox: number[];
 }
 
 export interface EarthquakeRecord {
-  id: string;
+  eventId: string;
   time: number;
-  mag: number;
-  allKey: string;
-  tsunami: number;
+  globalTime: string;
+  globalMag: string;
+  magScaled: number;
   location: string;
-  locationTsunami: string;
-  magBucket: string;
-  attributes: EarthquakeItem;
+  status: string;
+  tsunami: number;
+  feature: EarthquakeFeature;
+}
+
+export enum EarthquakeIndex {
+  GSI_TIME = 'GSI_Time',
+  GSI_MAGNITUDE = 'GSI_Magnitude',
+  GSI_LOCATION_MAGNITUDE = 'GSI_Location_Magnitude',
+  GSI_STATUS_TIME = 'GSI_Status_Time',
+  GSI_TSUNAMI_TIME = 'GSI_Tsunami_Time',
+  GSI_NETWORK_TIME = 'GSI_Network_Time', // Optional: not used in current implementation
 }

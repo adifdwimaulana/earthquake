@@ -1,4 +1,5 @@
 import { RequestLogService } from '@/module/logging/request-log.service';
+import { MessageResponse } from '@/shared/model';
 import { Controller, Post, UseInterceptors } from '@nestjs/common';
 import { RequestLogContext } from '../logging/request-log.decorator';
 import { RequestLoggingInterceptor } from '../logging/request-logging.interceptor';
@@ -13,11 +14,9 @@ export class EarthquakeController {
 
   @Post('ingest')
   @UseInterceptors(RequestLoggingInterceptor)
-  @RequestLogContext('/earthquake/ingest')
-  async ingestRecentEarthquakes(): Promise<{ message: string }> {
-    const result = await this.earthquakeService.ingestEarthquakeData();
-    console.log(`Ingested ${result.message}.`);
-    return result;
+  @RequestLogContext('/earthquakes/ingest')
+  async ingestEarthquakeData(): Promise<MessageResponse> {
+    return await this.earthquakeService.ingestEarthquakeData();
   }
 
   //   @Get()

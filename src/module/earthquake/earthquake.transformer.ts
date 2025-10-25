@@ -1,20 +1,22 @@
-import { EarthquakeItem, EarthquakeRecord } from './earthquake.model';
+import { EarthquakeFeature, EarthquakeRecord } from './earthquake.model';
 
 export function transformFeatureToRecord(
-  feature: EarthquakeItem,
+  feature: EarthquakeFeature,
 ): EarthquakeRecord {
   const { id, properties } = feature;
+  const magScaled = Math.round(properties.mag * 1000); // Scale magnitude to ensure precision
+  const location = properties.place.split(',').pop() || 'N/A'; // Take the last part as location
 
   return {
-    id,
+    eventId: id,
     time: properties.time,
-    mag: properties.mag,
-    allKey: 'ALL',
-    location: properties.net,
-    locationTsunami: `${properties.net}#${properties.tsunami}`,
+    globalTime: 'GLOBAL#TIME',
+    globalMag: 'GLOBAL#MAGNITUDE',
+    magScaled,
+    location: location.trim(),
+    status: properties.status,
     tsunami: properties.tsunami,
-    magBucket: 'MAG',
-    attributes: feature,
+    feature,
   };
 }
 

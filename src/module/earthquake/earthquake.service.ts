@@ -1,6 +1,9 @@
 import { DYNAMODB_CLIENT } from '@/module/dynamo/dynamo.provider';
+import { MessageResponse } from '@/shared/model';
+import { sleep } from '@/shared/utils/date';
 import {
   BatchWriteCommand,
+  BatchWriteCommandInput,
   QueryCommand,
   type DynamoDBDocumentClient,
 } from '@aws-sdk/lib-dynamodb';
@@ -11,10 +14,10 @@ import {
   Logger,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-
-import { getErrorMessage } from '@/shared/utils/common';
+import { Cron, CronExpression } from '@nestjs/schedule';
 import {
-  EarthquakeItem,
+  EarthquakeFeature,
+  EarthquakeIndex,
   EarthquakeRecord,
   USGSResponse,
 } from './earthquake.model';
@@ -23,71 +26,61 @@ import { batchArray, transformFeatureToRecord } from './earthquake.transformer';
 @Injectable()
 export class EarthquakeService {
   private readonly logger = new Logger(EarthquakeService.name);
-  private readonly earthquakeTable: string;
-  private readonly usgsUrl: string;
+  private readonly EARTHQUAKE_TABLE: string;
+  private readonly USGS_API_URL: string;
+  private readonly USGS_API_LIMIT = 100;
+  private readonly USGS_ERROR_MESSAGE =
+    'Failed to fetch earthquake data from USGS API';
+  private readonly MAX_RETRIES = 3;
+  private readonly MAX_BATCH_SIZE = 25;
 
   constructor(
     @Inject(DYNAMODB_CLIENT) private readonly db: DynamoDBDocumentClient,
     private readonly configService: ConfigService,
   ) {
-    this.earthquakeTable =
+    this.EARTHQUAKE_TABLE =
       this.configService.get<string>('EARTHQUAKE_TABLE_NAME') || 'earthquake';
-    this.usgsUrl =
+    this.USGS_API_URL =
       this.configService.get<string>('USGS_API_URL') || 'FALLBACK_URL';
   }
 
-  /**
-   * Get the latest earthquake timestamp from DynamoDB
-   */
-  private async getLatestEarthquakeTimestamp(): Promise<number | null> {
-    try {
-      const command = new QueryCommand({
-        TableName: this.earthquakeTable,
-        IndexName: 'GSI_Latest',
-        KeyConditionExpression: 'allKey = :allKey',
-        ExpressionAttributeValues: {
-          ':allKey': 'ALL',
-        },
-        ScanIndexForward: false,
-        Limit: 1,
-      });
+  private async getLatestTimestamp(): Promise<number | null> {
+    const command = new QueryCommand({
+      TableName: this.EARTHQUAKE_TABLE,
+      IndexName: EarthquakeIndex.GSI_TIME,
+      KeyConditionExpression: 'globalTime = :globalTime',
+      ExpressionAttributeValues: {
+        ':globalTime': 'GLOBAL#TIME',
+      },
+      ScanIndexForward: false,
+      Limit: 1,
+    });
 
-      const result = await this.db.send(command);
+    const { Items } = await this.db.send(command);
 
-      if (result.Items && result.Items.length > 0) {
-        return result.Items[0].time as number; // Use 'time' field from GSI
-      }
-
-      return null;
-    } catch (error) {
-      this.logger.error('Failed to get latest earthquake timestamp', {
-        error: getErrorMessage(error),
-      });
-      throw new InternalServerErrorException(
-        'Failed to get latest earthquake timestamp',
-      );
+    if (Items && Items.length > 0) {
+      return Items[0].time as number;
     }
+
+    return null;
   }
 
   /**
-   * Fetch earthquake data from USGS API
+   *
+   * @param startTimestamp latest timestamp from DB that will be used to fetch only newer records
+   * @returns earthquake features from USGS API
    */
-  private async fetchUsgsData(
-    startTime?: number,
-    limit = 100,
-  ): Promise<EarthquakeItem[]> {
+  private async fetchUsgsApi(): Promise<EarthquakeFeature[]> {
     try {
-      let url = `${this.usgsUrl}?format=geojson&limit=${limit}&orderby=time`;
+      const lastTimestamp = await this.getLatestTimestamp();
+      const startTimeQuery = lastTimestamp
+        ? `&starttime=${new Date(lastTimestamp + 1).toISOString()}` // +1ms because starttime is inclusive
+        : '';
+      const url = `${this.USGS_API_URL}?format=geojson&&orderby=time&limit=${this.USGS_API_LIMIT}${startTimeQuery}`;
 
-      if (startTime) {
-        const startTimeIso = new Date(startTime).toISOString();
-        url += `&starttime=${startTimeIso}`;
-      }
-
-      this.logger.log(`Fetching earthquake data from: ${url}`);
+      this.logger.log(`Fetching earthquake data from USGS API: ${url}`);
 
       const response = await fetch(url);
-
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
@@ -95,77 +88,103 @@ export class EarthquakeService {
       const data = (await response.json()) as USGSResponse;
 
       if (!data || !data.features) {
-        throw new Error('Invalid data format received from USGS');
+        throw new Error('Invalid data format received from USGS API');
       }
-
-      this.logger.log(
-        `Fetched ${data.features.length} earthquake records from USGS`,
-      );
 
       return data.features;
     } catch (error) {
-      this.logger.error('Failed to fetch earthquake data from USGS', {
-        error: getErrorMessage(error),
-        startTime,
-        limit,
-      });
-      throw new InternalServerErrorException(
-        'Failed to fetch earthquake data from USGS',
+      this.logger.error(this.USGS_ERROR_MESSAGE, error);
+      throw new InternalServerErrorException(this.USGS_ERROR_MESSAGE);
+    }
+  }
+
+  private async executeBatchAndHandleUnprocessed(
+    requestItems: BatchWriteCommandInput['RequestItems'],
+    attempt = 1,
+  ): Promise<number> {
+    if (
+      !requestItems ||
+      !requestItems[this.EARTHQUAKE_TABLE] ||
+      requestItems[this.EARTHQUAKE_TABLE].length === 0
+    ) {
+      this.logger.warn('[BatchWrite] No request items to process');
+      return 0;
+    }
+
+    try {
+      const { UnprocessedItems } = await this.db.send(
+        new BatchWriteCommand({ RequestItems: requestItems }),
       );
+
+      // If all processed, return stored count
+      if (
+        !UnprocessedItems ||
+        !UnprocessedItems[this.EARTHQUAKE_TABLE] ||
+        UnprocessedItems[this.EARTHQUAKE_TABLE].length === 0
+      ) {
+        return Object.values(requestItems[this.EARTHQUAKE_TABLE]).length;
+      }
+
+      // Retry unprocessed items
+      const unprocessedItems = UnprocessedItems[this.EARTHQUAKE_TABLE];
+      const backoffMs = Math.pow(2, attempt) * 100;
+
+      this.logger.warn(
+        `[BatchWrite] Attempt ${attempt}: ${unprocessedItems.length} unprocessed items, retrying in ${backoffMs} ms`,
+      );
+
+      // If MAX_RETRIES reached, give up
+      if (attempt >= this.MAX_RETRIES) {
+        this.logger.error(
+          `[BatchWrite] Giving up after ${this.MAX_RETRIES} attempts (${unprocessedItems.length} items still unprocessed)`,
+        );
+        return (
+          requestItems[this.EARTHQUAKE_TABLE].length - unprocessedItems.length
+        );
+      }
+
+      await sleep(backoffMs);
+      return this.executeBatchAndHandleUnprocessed(
+        { [this.EARTHQUAKE_TABLE]: unprocessedItems },
+        attempt + 1,
+      );
+    } catch (error) {
+      this.logger.error(`[BatchWrite] Error on attempt ${attempt}`, error);
+      throw new InternalServerErrorException('Batch write failed');
     }
   }
 
   /**
    * Store earthquake items in DynamoDB using batch write
    */
-  private async storeEarthquakeItems(
-    items: EarthquakeRecord[],
-  ): Promise<number> {
+  private async batchInsert(items: EarthquakeRecord[]): Promise<number> {
     if (items.length === 0) {
       return 0;
     }
 
     try {
-      // DynamoDB batch write supports up to 25 items per request
-      const batches = batchArray(items, 25);
+      const batches = batchArray(items, this.MAX_BATCH_SIZE);
       let totalStored = 0;
 
       for (const batch of batches) {
-        const putRequests = batch.map((item) => ({
-          PutRequest: {
-            Item: item,
-          },
+        const batchRequest = batch.map((item) => ({
+          PutRequest: { Item: item },
         }));
 
-        const command = new BatchWriteCommand({
-          RequestItems: {
-            [this.earthquakeTable]: putRequests,
-          },
-        });
+        const requestItems = {
+          [this.EARTHQUAKE_TABLE]: batchRequest,
+        };
 
-        const result = await this.db.send(command);
+        const storedCount =
+          await this.executeBatchAndHandleUnprocessed(requestItems);
 
-        // Handle unprocessed items if any
-        if (
-          result.UnprocessedItems &&
-          result.UnprocessedItems[this.earthquakeTable]?.length > 0
-        ) {
-          this.logger.warn(
-            `${result.UnprocessedItems[this.earthquakeTable].length} items were not processed`,
-          );
-          // In production, you might want to retry unprocessed items
-        }
-
-        totalStored += batch.length;
+        totalStored += storedCount;
       }
 
       this.logger.log(`Successfully stored ${totalStored} earthquake records`);
       return totalStored;
     } catch (error) {
-      this.logger.error('Failed to store earthquake items in DynamoDB', {
-        error: error instanceof Error ? error.message : String(error),
-        itemCount: items.length,
-      });
+      this.logger.error('Failed to store earthquake items in DynamoDB', error);
       throw new InternalServerErrorException(
         'Failed to store earthquake data in database',
       );
@@ -175,50 +194,36 @@ export class EarthquakeService {
   /**
    * Main method to ingest earthquake data
    */
-  public async ingestEarthquakeData(): Promise<{ message: string }> {
+  public async ingestEarthquakeData(): Promise<MessageResponse> {
     try {
-      this.logger.log('Starting earthquake data ingestion');
+      const earthquakeFeatures = await this.fetchUsgsApi();
 
-      const latestTimestamp = await this.getLatestEarthquakeTimestamp();
-
-      const usgsFeatures = await this.fetchUsgsData(
-        latestTimestamp ?? undefined,
-      );
-
-      if (usgsFeatures.length === 0) {
-        this.logger.log('No new earthquake data available');
-        return { message: 'No new earthquake data available' };
+      if (earthquakeFeatures.length === 0) {
+        return new MessageResponse('Earthquake data is already up to date');
       }
 
-      // Filter out duplicates if we have a latest timestamp
-      const newFeatures = latestTimestamp
-        ? usgsFeatures.filter(
-            (feature) => feature.properties.time > latestTimestamp,
-          )
-        : usgsFeatures;
+      const records = earthquakeFeatures.map(transformFeatureToRecord);
+      const storedCount = await this.batchInsert(records);
 
-      if (newFeatures.length === 0) {
-        this.logger.log('No new earthquake data after filtering duplicates');
-        return { message: 'No new earthquake data available' };
-      }
-
-      const earthquakeItems = newFeatures.map(transformFeatureToRecord);
-
-      const storedCount = await this.storeEarthquakeItems(earthquakeItems);
-
-      this.logger.log(
+      return new MessageResponse(
         `Ingestion completed successfully. Stored ${storedCount} new records`,
       );
-
-      return {
-        message: `Ingestion completed successfully. Stored ${storedCount} new records`,
-      };
     } catch (error) {
-      this.logger.error('Earthquake data ingestion failed', {
-        error: getErrorMessage(error),
-        stack: error instanceof Error ? error.stack : undefined,
-      });
+      this.logger.error('Earthquake data ingestion failed', error);
       throw error;
+    }
+  }
+
+  @Cron(CronExpression.EVERY_HOUR)
+  async scheduledIngestEarthquakeData(): Promise<void> {
+    this.logger.log(
+      `Starting scheduled earthquake data ingestion at ${new Date().toISOString()}`,
+    );
+    try {
+      const result = await this.ingestEarthquakeData();
+      this.logger.log(result.message);
+    } catch (error) {
+      this.logger.error('Earthquake data ingestion failed', error);
     }
   }
 }

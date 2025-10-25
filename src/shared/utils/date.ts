@@ -5,3 +5,7 @@ export function timestampToDate(timestamp: number): Date {
 export function dateToTimestamp(date: Date): number {
   return date.getTime();
 }
+
+export function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}

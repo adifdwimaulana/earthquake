@@ -8,8 +8,7 @@ export class CdkStack extends cdk.Stack {
 
     const earthquakeTable = new dynamodb.Table(this, 'EarthquakeTable', {
       tableName: 'earthquake',
-      partitionKey: { name: 'id', type: dynamodb.AttributeType.STRING },
-      sortKey: { name: 'time', type: dynamodb.AttributeType.NUMBER },
+      partitionKey: { name: 'eventId', type: dynamodb.AttributeType.STRING },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
@@ -17,55 +16,66 @@ export class CdkStack extends cdk.Stack {
     const addGlobalSecondaryIndex = (
       table: dynamodb.Table,
       indexName: string,
-      pk: { name: string; type: dynamodb.AttributeType },
-      sk?: { name: string; type: dynamodb.AttributeType },
+      partitionKey: { name: string; type: dynamodb.AttributeType },
+      sortKey?: { name: string; type: dynamodb.AttributeType },
     ) =>
       table.addGlobalSecondaryIndex({
         indexName,
-        partitionKey: pk,
-        sortKey: sk,
+        partitionKey,
+        sortKey,
         projectionType: dynamodb.ProjectionType.ALL,
       });
 
     addGlobalSecondaryIndex(
       earthquakeTable,
-      'GSI_Latest',
-      { name: 'allKey', type: dynamodb.AttributeType.STRING },
+      'GSI_Time',
+      { name: 'globalTime', type: dynamodb.AttributeType.STRING },
       { name: 'time', type: dynamodb.AttributeType.NUMBER },
     );
 
     addGlobalSecondaryIndex(
       earthquakeTable,
-      'GSI_LocationTime',
-      { name: 'location', type: dynamodb.AttributeType.STRING },
+      'GSI_Magnitude',
+      {
+        name: 'globalMag',
+        type: dynamodb.AttributeType.STRING,
+      },
+      { name: 'magScaled', type: dynamodb.AttributeType.NUMBER },
+    );
+
+    addGlobalSecondaryIndex(
+      earthquakeTable,
+      'GSI_Location_Magnitude',
+      {
+        name: `location`,
+        type: dynamodb.AttributeType.STRING,
+      },
+      { name: 'magScaled', type: dynamodb.AttributeType.NUMBER },
+    );
+
+    addGlobalSecondaryIndex(
+      earthquakeTable,
+      'GSI_Status_Time',
+      { name: 'status', type: dynamodb.AttributeType.STRING },
       { name: 'time', type: dynamodb.AttributeType.NUMBER },
     );
 
     addGlobalSecondaryIndex(
       earthquakeTable,
-      'GSI_TsunamiTime',
-      { name: 'tsunami', type: dynamodb.AttributeType.NUMBER },
-      { name: 'time', type: dynamodb.AttributeType.NUMBER },
-    );
-
-    addGlobalSecondaryIndex(
-      earthquakeTable,
-      'GSI_LocationTsunamiTime',
-      { name: 'locationTsunami', type: dynamodb.AttributeType.STRING },
-      { name: 'time', type: dynamodb.AttributeType.NUMBER },
-    );
-
-    addGlobalSecondaryIndex(
-      earthquakeTable,
-      'GSI_Mag',
-      { name: 'magBucket', type: dynamodb.AttributeType.STRING },
-      { name: 'mag', type: dynamodb.AttributeType.NUMBER },
+      'GSI_Tsunami_Time',
+      {
+        name: 'tsunami',
+        type: dynamodb.AttributeType.NUMBER,
+      },
+      {
+        name: 'time',
+        type: dynamodb.AttributeType.NUMBER,
+      },
     );
 
     const logTable = new dynamodb.Table(this, 'LogTable', {
       tableName: 'log',
-      partitionKey: { name: 'id', type: dynamodb.AttributeType.STRING },
-      sortKey: { name: 'timestamp', type: dynamodb.AttributeType.NUMBER },
+      partitionKey: { name: 'eventId', type: dynamodb.AttributeType.STRING },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
