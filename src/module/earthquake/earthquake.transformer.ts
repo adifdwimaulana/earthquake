@@ -1,10 +1,11 @@
+import { scaleMagnitude } from '@/shared/util';
 import { EarthquakeFeature, EarthquakeRecord } from './earthquake.model';
 
 export function transformFeatureToRecord(
   feature: EarthquakeFeature,
 ): EarthquakeRecord {
   const { id, properties } = feature;
-  const magScaled = Math.round(properties.mag * 1000); // Scale magnitude to ensure precision
+  const magScaled = scaleMagnitude(properties.mag); // Scale magnitude to ensure precision
   const location = properties.place.split(',').pop() || 'N/A'; // Take the last part as location
 
   return {
@@ -18,6 +19,12 @@ export function transformFeatureToRecord(
     tsunami: properties.tsunami,
     feature,
   };
+}
+
+export function transformRecordToFeature(
+  record: EarthquakeRecord,
+): EarthquakeFeature {
+  return record.feature;
 }
 
 export function batchArray<T>(array: T[], batchSize: number): T[][] {

@@ -1,13 +1,20 @@
 import { DYNAMODB_CLIENT } from '@/module/dynamo/dynamo.provider';
 import { MessageResponse } from '@/shared/model';
-import { sleep } from '@/shared/utils/date';
+import {
+  decodeLastEvaluatedKey,
+  encodeLastEvaluatedKey,
+  scaleMagnitude,
+  sleep,
+} from '@/shared/util';
 import {
   BatchWriteCommand,
   BatchWriteCommandInput,
   QueryCommand,
+  QueryCommandInput,
   type DynamoDBDocumentClient,
 } from '@aws-sdk/lib-dynamodb';
 import {
+  BadRequestException,
   Inject,
   Injectable,
   InternalServerErrorException,
@@ -15,13 +22,18 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Cron, CronExpression } from '@nestjs/schedule';
+import { EarthquakeListResponse, EarthquakeQuery } from './earthquake.dto';
 import {
   EarthquakeFeature,
   EarthquakeIndex,
   EarthquakeRecord,
   USGSResponse,
 } from './earthquake.model';
-import { batchArray, transformFeatureToRecord } from './earthquake.transformer';
+import {
+  batchArray,
+  transformFeatureToRecord,
+  transformRecordToFeature,
+} from './earthquake.transformer';
 
 @Injectable()
 export class EarthquakeService {
@@ -66,9 +78,9 @@ export class EarthquakeService {
   }
 
   /**
-   *
+   * Fetch earthquake geojson data from USGS API
    * @param startTimestamp latest timestamp from DB that will be used to fetch only newer records
-   * @returns earthquake features from USGS API
+   * @returns EarthquakeFeature[]
    */
   private async fetchUsgsApi(): Promise<EarthquakeFeature[]> {
     try {
@@ -155,7 +167,9 @@ export class EarthquakeService {
   }
 
   /**
-   * Store earthquake items in DynamoDB using batch write
+   * Batch insert earthquake records into DynamoDB
+   * @param items
+   * @returns
    */
   private async batchInsert(items: EarthquakeRecord[]): Promise<number> {
     if (items.length === 0) {
@@ -191,9 +205,6 @@ export class EarthquakeService {
     }
   }
 
-  /**
-   * Main method to ingest earthquake data
-   */
   public async ingestEarthquakeData(): Promise<MessageResponse> {
     try {
       const earthquakeFeatures = await this.fetchUsgsApi();
@@ -206,7 +217,7 @@ export class EarthquakeService {
       const storedCount = await this.batchInsert(records);
 
       return new MessageResponse(
-        `Ingestion completed successfully. Stored ${storedCount} new records`,
+        `Ingestion completed successfully. Stored ${storedCount} records`,
       );
     } catch (error) {
       this.logger.error('Earthquake data ingestion failed', error);
@@ -226,4 +237,157 @@ export class EarthquakeService {
       this.logger.error('Earthquake data ingestion failed', error);
     }
   }
+
+  private xor(a: unknown, b: unknown): boolean {
+    return Boolean(a) !== Boolean(b);
+  }
+
+  private buildQueryCommandInput(query: EarthquakeQuery): QueryCommandInput {
+    const { limit, ...filter } = query;
+    const {
+      startTime,
+      endTime,
+      minMagnitude,
+      maxMagnitude,
+      location,
+      isTsunami,
+    } = filter;
+
+    const queryCommand: QueryCommandInput = {
+      TableName: this.EARTHQUAKE_TABLE,
+      Limit: limit,
+      ScanIndexForward: false,
+    };
+
+    const exprNames: Record<string, string> = {};
+    const exprValues: Record<string, any> = {};
+    const keyConds: string[] = [];
+
+    // If next token exists, decode and set ExclusiveStartKey
+    const nextToken = query?.nextToken;
+    if (nextToken) {
+      queryCommand.ExclusiveStartKey = decodeLastEvaluatedKey(nextToken);
+    }
+
+    // Validate filters
+    if (this.xor(minMagnitude, maxMagnitude))
+      throw new BadRequestException(
+        'Both minMagnitude and maxMagnitude must be provided',
+      );
+    if (this.xor(startTime, endTime))
+      throw new BadRequestException(
+        'Both startTime and endTime must be provided',
+      );
+
+    const hasTsunami = isTsunami !== undefined;
+    const hasMagnitude =
+      minMagnitude !== undefined && maxMagnitude !== undefined;
+    const hasTimeRange = startTime && endTime;
+    const hasLocation = Boolean(location);
+    const noFilters = !hasTsunami && !hasMagnitude && !hasLocation;
+
+    // ========== Helper Methods ==========
+    const addTimeRange = () => {
+      if (hasTimeRange) {
+        const startMillis = new Date(startTime).getTime();
+        const endMillis = new Date(endTime).getTime();
+
+        keyConds.push('#time BETWEEN :startTime AND :endTime');
+        exprNames['#time'] = 'time';
+        exprValues[':startTime'] = startMillis;
+        exprValues[':endTime'] = endMillis;
+      }
+    };
+
+    const setCommand = (index: string) => {
+      queryCommand.IndexName = index;
+      queryCommand.KeyConditionExpression = keyConds.join(' AND ');
+      queryCommand.ExpressionAttributeValues = exprValues;
+      if (Object.keys(exprNames).length > 0)
+        queryCommand.ExpressionAttributeNames = exprNames;
+    };
+
+    // 1. If isTsunami filter is provided, use GSI_Tsunami index
+    if (hasTsunami) {
+      keyConds.push('isTsunami = :isTsunami');
+      exprValues[':isTsunami'] = Number(isTsunami);
+      addTimeRange();
+      setCommand(EarthquakeIndex.GSI_TSUNAMI_TIME);
+      return queryCommand;
+    }
+
+    // 2. If magnitude filter is provided, use GSI_Magnitude or GSI_Location_Magnitude
+    if (hasMagnitude) {
+      exprValues[':minMagnitude'] = scaleMagnitude(minMagnitude);
+      exprValues[':maxMagnitude'] = scaleMagnitude(maxMagnitude);
+
+      if (hasLocation) {
+        keyConds.push(
+          '#location = :location AND magScaled BETWEEN :minMagnitude AND :maxMagnitude',
+        );
+        exprNames['#location'] = 'location';
+        exprValues[':location'] = location!;
+        setCommand(EarthquakeIndex.GSI_LOCATION_MAGNITUDE);
+        return queryCommand;
+      }
+
+      keyConds.push('globalMag = :globalMag');
+      exprValues[':globalMag'] = 'GLOBAL#MAGNITUDE';
+      keyConds.push('magScaled BETWEEN :minMagnitude AND :maxMagnitude');
+      setCommand(EarthquakeIndex.GSI_MAGNITUDE);
+      return queryCommand;
+    }
+
+    // 3. If only location filter is provided, use GSI_Location_Magnitude
+    if (hasLocation) {
+      keyConds.push('#location = :location');
+      exprNames['#location'] = 'location';
+      exprValues[':location'] = location!;
+      setCommand(EarthquakeIndex.GSI_LOCATION_MAGNITUDE);
+      return queryCommand;
+    }
+
+    // 4. If no filters or time range is provided, use GSI_TIME
+    if (noFilters || hasTimeRange) {
+      keyConds.push('globalTime = :globalTime');
+      exprValues[':globalTime'] = 'GLOBAL#TIME';
+      addTimeRange();
+      setCommand(EarthquakeIndex.GSI_TIME);
+      return queryCommand;
+    }
+
+    throw new BadRequestException('Invalid combination of filters provided');
+  }
+
+  public async getEarthquakes(
+    query: EarthquakeQuery,
+  ): Promise<EarthquakeListResponse> {
+    try {
+      const queryCommandInput = this.buildQueryCommandInput(query);
+      const command = new QueryCommand(queryCommandInput);
+
+      const { Items, Count, LastEvaluatedKey } = await this.db.send(command);
+
+      if (Items && Items.length > 0) {
+        const features = Items.map((item) =>
+          transformRecordToFeature(item as EarthquakeRecord),
+        );
+        const totalCount = Count || Items.length;
+        let nextToken: string | undefined;
+
+        if (LastEvaluatedKey) {
+          nextToken = encodeLastEvaluatedKey(LastEvaluatedKey);
+        }
+
+        return new EarthquakeListResponse(features, totalCount, nextToken);
+      }
+
+      return new EarthquakeListResponse([], 0);
+    } catch (error) {
+      this.logger.error('Failed to query earthquake data', error);
+      throw new InternalServerErrorException('Failed to query earthquake data');
+    }
+  }
+
+  // public async getEarthquakeById(eventId: string) {}
 }

@@ -55,13 +55,6 @@ export class CdkStack extends cdk.Stack {
 
     addGlobalSecondaryIndex(
       earthquakeTable,
-      'GSI_Status_Time',
-      { name: 'status', type: dynamodb.AttributeType.STRING },
-      { name: 'time', type: dynamodb.AttributeType.NUMBER },
-    );
-
-    addGlobalSecondaryIndex(
-      earthquakeTable,
       'GSI_Tsunami_Time',
       {
         name: 'tsunami',
