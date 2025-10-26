@@ -1,0 +1,143 @@
+{
+	"info": {
+		"_postman_id": "a74811d9-b61e-496b-a68c-5a0292854c93",
+		"name": "Earthquake API",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "4792857"
+	},
+	"item": [
+		{
+			"name": "Ingest",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:3000/api/v1/earthquakes/ingest",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "3000",
+					"path": [
+						"api",
+						"v1",
+						"earthquakes",
+						"ingest"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "GET Earthquakes",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:3000/api/v1/earthquakes?minMagnitude=2.4&maxMagnitude=7.5&location=Alaska",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "3000",
+					"path": [
+						"api",
+						"v1",
+						"earthquakes"
+					],
+					"query": [
+						{
+							"key": "minMagnitude",
+							"value": "2.4"
+						},
+						{
+							"key": "maxMagnitude",
+							"value": "7.5"
+						},
+						{
+							"key": "nextToken",
+							"value": "eyJldmVudElkIjoidXM2MDAwcmpnayIsIm1hZ1NjYWxlZCI6NDIwMCwiZ2xvYmFsTWFnIjoiR0xPQkFMI01BR05JVFVERSJ9",
+							"disabled": true
+						},
+						{
+							"key": "location",
+							"value": "Alaska"
+						},
+						{
+							"key": "endTime",
+							"value": "2025-10-25T21:36:18.332Z",
+							"disabled": true
+						},
+						{
+							"key": "startTime",
+							"value": "2025-10-25T11:13:06.830Z",
+							"disabled": true
+						},
+						{
+							"key": "isTsunami",
+							"value": "true",
+							"disabled": true
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "GET Earthquakes by Event ID",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:3000/api/v1/earthquakes/us6000rjgm",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "3000",
+					"path": [
+						"api",
+						"v1",
+						"earthquakes",
+						"us6000rjgm"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "GET Request Count By Endpoint and Date",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://localhost:3000/api/v1/analytics/request-per-day",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "3000",
+					"path": [
+						"api",
+						"v1",
+						"analytics",
+						"request-per-day"
+					],
+					"query": [
+						{
+							"key": "endpoint",
+							"value": "/earthquakes",
+							"disabled": true
+						},
+						{
+							"key": "date",
+							"value": "2025-10-26",
+							"disabled": true
+						}
+					]
+				}
+			},
+			"response": []
+		}
+	]
+}

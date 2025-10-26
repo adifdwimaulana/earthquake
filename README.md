@@ -1,151 +1,156 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# 🌎 Earthquake API
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+**Earthquake API** is a **NestJS service** designed to ingest and expose recent earthquake data from the [USGS Earthquake API](https://earthquake.usgs.gov/).  
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+---
 
-## Description
+## 🧱 Local / Development Environment Setup
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+This project is **fully containerized** to ensure consistency across environment, leveraging AWS emulation with **LocalStack**.
 
-## Local development
+**Tech Stack Overview:**
+- **NestJS**
+- **AWS DynamoDB**
+- **AWS CDK (aws-cdk-local)**
+- **LocalStack**
+- **Docker Compose**
 
-1. Start LocalStack and supporting containers:
+---
 
-	```bash
-	docker-compose up -d
-	```
+## 🚀 How To Run the Service
 
-2. Install dependencies and run the NestJS service:
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/adifdwimaulana/earthquake.git
+   cd earthquake
+   ```
 
-	```bash
-	pnpm install
-	pnpm start:dev
-	```
+2. Copy and configure environment variables:
+   ```bash
+   cp .env.example .env
+   ```
 
-3. Deploy the DynamoDB tables (CDK bootstrap + deploy) if you need the infrastructure provisioned automatically:
+3. Install dependencies:
+   ```bash
+   pnpm install
+   ```
 
-	```bash
-	pnpm dlx aws-cdk bootstrap
-	pnpm dlx aws-cdk deploy
-	```
+4. Start the containers:
+   ```bash
+   docker compose up
+   ```
 
-The service uses the `.env` file for LocalStack endpoints and table names. Adjust `EARTHQUAKE_SOURCE_URL` if you want to pull a different USGS feed.
+5. Access the API:
+   - API Base URL → [http://localhost:3000](http://localhost:3000)
+   - Swagger (OpenAPI) Docs → [http://localhost:3000/api](http://localhost:3000/api)
 
-## API overview
+6. (Optional) Test with Postman:
+   Import the provided `postman_collection.json`.
 
-| Method | Path                       | Description |
-| ------ | -------------------------- | ----------- |
-| `POST` | `/earthquake/ingest`       | Fetches the 100 most recent earthquakes from USGS and upserts them into DynamoDB. |
-| `GET`  | `/earthquake`              | Lists earthquakes with pagination. Filter by `minMagnitude`, `maxMagnitude`, `region`, `startTime`, or `endTime`. |
-| `GET`  | `/earthquake/metrics/requests` | Aggregates captured request logs (`interval=day \| week`) to understand endpoint usage and popular filter combinations. |
+---
 
-Each data-modifying or listing request is captured by the request logging subsystem so that auditing and analytics queries can be performed later.
+## 📖 Overview
 
-## DynamoDB data model
+The **Earthquake API** relies on the official **USGS Earthquake feed** to keep an up-to-date record of seismic events. The ingestion system is optimized to be **idempotent**, **fault-tolerant**, and **cost-efficient**.
 
-### Earthquake table (`Earthquake`)
+### Key Features and Enhancements
 
-- **Partition key**: `pk` (constant value `EARTHQUAKE`)
-- **Sort key**: `sk` (event timestamp in milliseconds)
-- **Local secondary index**: `MagnitudeIndex` on attribute `magnitude` to enable range queries by magnitude.
-- **Global secondary index**: `RegionIndex` on `gsi1pk` (`region`) + `sk` for fast region-based lookups.
+1. **Incremental Fetching**  
+   Ingests only *new* records from USGS using the **latest timestamp**, avoiding unnecessary overwrites of existing data.
 
-Stored items include metadata such as magnitude, depth, coordinates, tsunami flag, and derived region. The ingestion workflow retries batch writes and skips malformed entries.
+2. **Scheduled Fetching**  
+   A scheduler ensures consistent data refresh and prevents ingestion gaps caused by API delays or network issues.
 
-### Request log table (`Metadata`)
+3. **Batch Retry with Backoff**  
+   Implements a retry mechanism with exponential backoff for DynamoDB `UnprocessedItems`, improving ingestion reliability.
 
-- **Partition key**: `pk` (normalized endpoint path)
-- **Sort key**: `sk` (ISO timestamp)
-- **Global secondary index**: `DayIndex` on `dayBucket` for day-level analytics (optional for future extensions).
+---
 
-Request log entries capture query parameters, headers, execution time, response summaries, and are used by the metrics endpoint.
+## 🗂 Schema Design
 
-## Project setup
+### Earthquake Table
 
-```bash
-$ pnpm install
-```
+| Type | Name                     | Partition Key | Sort Key  |
+|------|---------------------------|----------------|-----------|
+| PK   | —                         | `eventId`      | —         |
+| GSI  | GSI_TIME                 | `globalTime`   | `time`    |
+| GSI  | GSI_MAGNITUDE            | `globalMag`    | `magScaled` |
+| GSI  | GSI_LOCATION_MAGNITUDE   | `location`     | `magScaled` |
+| GSI  | GSI_TSUNAMI_TIME         | `tsunami`      | `time`    |
 
-## Compile and run the project
+---
 
-```bash
-# development
-$ pnpm run start
+### Log Table
 
-# watch mode
-$ pnpm run start:dev
+| Type | Name                        | Partition Key | Sort Key   |
+|------|-----------------------------|----------------|------------|
+| PK   | —                           | `requestLogId` | —          |
+| GSI  | GSI_DayBucket_Endpoint      | `dayBucket`    | `endpoint` |
+| GSI  | GSI_MonthBucket_Magnitude   | `monthBucket`  | `magScaled` |
 
-# production mode
-$ pnpm run start:prod
-```
+### Design Consideration
 
-## Run tests
+- **Global Secondary Indexes (GSIs)** enable flexible query combinations such as:
+  - Fetching by `region` + `magnitude`
+  - Fetching by `tsunami` + `time`
+- **Composite keys** (e.g., `location#magnitude`) minimize query cost and allow precise access patterns.  
+- **Day/Month buckets** in log table enable **time-based analytics** such as total requests, response latency distribution, and endpoint popularity.
 
-```bash
-# unit tests
-$ pnpm run test
+---
 
-# e2e tests
-$ pnpm run test:e2e
+## ⚠️ Error Handling
 
-# test coverage
-$ pnpm run test:cov
-```
+### 1. BatchWrite UnprocessedItems
+When DynamoDB returns `UnprocessedItems`, the service retries using a **backoff algorithm** to prevent partition throttling.
 
-## Deployment
+### 2. Custom Filter Exception
+Introduces a custom `ForbiddenFilterException` to inform users with **valid filter combinations**.
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
+---
 
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+## ⚙️ Scalability Plan (Handling 500 RPS)
 
-```bash
-$ pnpm install -g @nestjs/mau
-$ mau deploy
-```
+To handle 500 RPS, it is a case by case scenario depends on which endpoint experienced high traffic:
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+### Scenario 1 — High Read Traffic (`/earthquakes/:eventId`)
+- GET earthquakes by eventId data is rarely changed, so we can introduce caching with a short ttl (10 minutes). 
+- Invalidate cache if `/earthquakes/ingest` is called.
 
-## Resources
+### Scenario 2 — High Write or Query Traffic (`/earthquakes`, `/earthquake/ingest`)
+- **Avoid Hot Partitions:** Implement **sharded GSI partition keys** (e.g., `region#shardId`) to distribute write load.
+- **Auto Scaling:** Enable **DynamoDB auto scaling** and container horizontal scaling based on `memoryUsage` threshold.
+- **Async Processing:** Decouple ingestion process by designing an asynchronous API using AWS SQS + Lambda.
 
-Check out a few resources that may come in handy when working with NestJS:
+---
 
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
+## 🧪 Testing Strategy
 
-## Support
+Current test coverage includes:
+- ✅ **Unit Tests** for core logic and services.
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
+Planned future enhancements:
+- 🔄 **Integration Tests:**  
+  Using LocalStack to simulate AWS resources in CI.
+- 💥 **Load Tests:**  
+  Implemented with **k6** to evaluate system performance at scale before production rollout.
 
-## Stay in touch
+---
 
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
+## 📊 Monitoring & Observability (Future Plan)
 
-## License
+If extended, the next steps include:
+- **AWS CloudWatch:** Real-time metrics for ingestion latency, batch retries, and API response times.
+- **Structured Logging:** Centralized logging for analytics and troubleshooting.
+- **Alerting Rules:** Automated alerts for failed ingestions or DynamoDB throttling events.
 
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+---
+
+## 🧠 DynamoDB Design Thought Process
+
+I have spent most of the development time at this step, because I need to design the access pattern upfront. I have several times revisit the index structure to adjust with the API's access pattern.
+
+- Decide what query or parameters that could be used as filter
+- Decide the table's structure (partition key and sort key)
+- Decide the index structure. Since I use, eventId and uuid as the PK then I only use GSI in this project.
+
+---
