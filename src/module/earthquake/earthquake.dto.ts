@@ -1,3 +1,4 @@
+import { EARTHQUAKE_FEATURE, NEXT_TOKEN } from '@/shared/constant';
 import { ApiProperty } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
@@ -88,51 +89,12 @@ export class EarthquakeQuery {
     description: 'Token to fetch the next page',
     required: false,
     type: String,
-    example:
-      'eyJldmVudElkIjoidXM2MDAwcmpldiIsIm1hZ1NjYWxlZCI6NDUwMCwiZ2xvYmFsTWFnIjoiR0xPQkFMI01BR05JVFVERSJ9',
+    example: NEXT_TOKEN,
   })
   @IsString()
   @IsOptional()
   nextToken: string | null;
 }
-
-const EXAMPLE_EARTHQUAKE_FEATURE: EarthquakeFeature = {
-  type: 'Feature',
-  properties: {
-    mag: 5.2,
-    place: '39 km NW of Slavyanka, Russia',
-    time: 1761392723124,
-    updated: 1761396988501,
-    tz: null,
-    url: 'https://earthquake.usgs.gov/earthquakes/eventpage/us6000rjf6',
-    detail:
-      'https://earthquake.usgs.gov/fdsnws/event/1/query?eventid=us6000rjf6&format=geojson',
-    felt: 1,
-    cdi: 1,
-    mmi: null,
-    alert: null,
-    status: 'reviewed',
-    tsunami: 0,
-    sig: 416,
-    net: 'us',
-    code: '6000rjf6',
-    ids: ',us6000rjf6,usauto6000rjf6,',
-    sources: ',us,usauto,',
-    types: ',dyfi,internal-moment-tensor,origin,phase-data,',
-    nst: 95,
-    dmin: 1.33,
-    rms: 0.51,
-    gap: 30,
-    magType: 'mb',
-    type: 'earthquake',
-    title: 'M 5.2 - 39 km NW of Slavyanka, Russia',
-  },
-  geometry: {
-    type: 'Point',
-    coordinates: [131.0017, 43.0788, 561.686],
-  },
-  id: 'us6000rjf6',
-};
 
 export class EarthquakeListResponse {
   constructor(data: EarthquakeFeature[], count: number, nextToken?: string) {
@@ -144,7 +106,7 @@ export class EarthquakeListResponse {
   @ApiProperty({
     description: 'List of earthquake features',
     type: [EarthquakeFeature],
-    example: [EXAMPLE_EARTHQUAKE_FEATURE],
+    example: [EARTHQUAKE_FEATURE],
   })
   @ValidateNested({ each: true })
   @Type(() => EarthquakeFeature)
@@ -161,8 +123,7 @@ export class EarthquakeListResponse {
     description: 'Token to fetch the next page',
     required: false,
     type: String,
-    example:
-      'eyJldmVudElkIjoidXM2MDAwcmpldiIsIm1hZ1NjYWxlZCI6NDUwMCwiZ2xvYmFsTWFnIjoiR0xPQkFMI01BR05JVFVERSJ9',
+    example: NEXT_TOKEN,
   })
   @IsString()
   @IsOptional()

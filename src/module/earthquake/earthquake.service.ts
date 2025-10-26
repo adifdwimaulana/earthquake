@@ -1,4 +1,6 @@
 import { DYNAMODB_CLIENT } from '@/module/dynamo/dynamo.provider';
+import { ALLOWED_FILTERS } from '@/shared/constant';
+import { ForbiddenFilterException } from '@/shared/exception';
 import { MessageResponse } from '@/shared/model';
 import {
   decodeLastEvaluatedKey,
@@ -45,6 +47,8 @@ export class EarthquakeService {
     'Failed to fetch earthquake data from USGS API';
   private readonly MAX_RETRIES = 3;
   private readonly MAX_BATCH_SIZE = 25;
+  private readonly FORBIDDEN_FILTER_ERROR_MESSAGE =
+    'Invalid combination of filters provided';
 
   constructor(
     @Inject(DYNAMODB_CLIENT) private readonly db: DynamoDBDocumentClient,
@@ -225,7 +229,7 @@ export class EarthquakeService {
     }
   }
 
-  @Cron(CronExpression.EVERY_HOUR)
+  @Cron(CronExpression.EVERY_10_MINUTES)
   async scheduledIngestEarthquakeData(): Promise<void> {
     this.logger.log(
       `Starting scheduled earthquake data ingestion at ${new Date().toISOString()}`,
@@ -240,6 +244,49 @@ export class EarthquakeService {
 
   private xor(a: unknown, b: unknown): boolean {
     return Boolean(a) !== Boolean(b);
+  }
+
+  private validateFilters(query: EarthquakeQuery): void {
+    const {
+      startTime,
+      endTime,
+      minMagnitude,
+      maxMagnitude,
+      location,
+      isTsunami,
+    } = query;
+
+    if (this.xor(minMagnitude, maxMagnitude))
+      throw new BadRequestException(
+        'Both minMagnitude and maxMagnitude must be provided',
+      );
+
+    if (this.xor(startTime, endTime))
+      throw new BadRequestException(
+        'Both startTime and endTime must be provided',
+      );
+
+    const hasTsunami = isTsunami !== undefined;
+    const hasMagnitude =
+      minMagnitude !== undefined && maxMagnitude !== undefined;
+    const hasTimeRange = startTime && endTime;
+    const hasLocation = Boolean(location);
+
+    const invalidTsunamiCombination =
+      hasTsunami && (hasMagnitude || hasLocation);
+    const invalidLocationTimeCombination = hasLocation && hasTimeRange;
+    const invalidMagnitudeTimeCombination = hasMagnitude && hasTimeRange;
+
+    if (
+      invalidTsunamiCombination ||
+      invalidLocationTimeCombination ||
+      invalidMagnitudeTimeCombination
+    ) {
+      throw new ForbiddenFilterException(
+        this.FORBIDDEN_FILTER_ERROR_MESSAGE,
+        ALLOWED_FILTERS,
+      );
+    }
   }
 
   private buildQueryCommandInput(query: EarthquakeQuery): QueryCommandInput {
@@ -269,21 +316,12 @@ export class EarthquakeService {
       queryCommand.ExclusiveStartKey = decodeLastEvaluatedKey(nextToken);
     }
 
-    // Validate filters
-    if (this.xor(minMagnitude, maxMagnitude))
-      throw new BadRequestException(
-        'Both minMagnitude and maxMagnitude must be provided',
-      );
-    if (this.xor(startTime, endTime))
-      throw new BadRequestException(
-        'Both startTime and endTime must be provided',
-      );
-
     const hasTsunami = isTsunami !== undefined;
     const hasMagnitude =
       minMagnitude !== undefined && maxMagnitude !== undefined;
     const hasTimeRange = startTime && endTime;
     const hasLocation = Boolean(location);
+    // Either no filter or only time range is provided
     const noFilters = !hasTsunami && !hasMagnitude && !hasLocation;
 
     // ========== Helper Methods ==========
@@ -347,7 +385,8 @@ export class EarthquakeService {
       return queryCommand;
     }
 
-    // 4. If no filters or time range is provided, use GSI_TIME
+    // 4. If no filters or time rang
+    // // Either no filter or only time range is providede is provided, use GSI_TIME
     if (noFilters || hasTimeRange) {
       keyConds.push('globalTime = :globalTime');
       exprValues[':globalTime'] = 'GLOBAL#TIME';
@@ -363,6 +402,8 @@ export class EarthquakeService {
     query: EarthquakeQuery,
   ): Promise<EarthquakeListResponse> {
     try {
+      this.validateFilters(query);
+
       const queryCommandInput = this.buildQueryCommandInput(query);
       const command = new QueryCommand(queryCommandInput);
 
@@ -385,9 +426,7 @@ export class EarthquakeService {
       return new EarthquakeListResponse([], 0);
     } catch (error) {
       this.logger.error('Failed to query earthquake data', error);
-      throw new InternalServerErrorException('Failed to query earthquake data');
+      throw error;
     }
   }
-
-  // public async getEarthquakeById(eventId: string) {}
 }
