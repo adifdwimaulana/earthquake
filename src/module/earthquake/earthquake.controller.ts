@@ -1,4 +1,3 @@
-import { RequestLogService } from '@/module/logging/request-log.service';
 import { ALLOWED_FILTERS, EARTHQUAKE_FEATURE } from '@/shared/constant';
 import { ForbiddenFilterException } from '@/shared/exception';
 import { MessageResponse } from '@/shared/model';
@@ -13,8 +12,8 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
-import { RequestLogContext } from '../logging/request-log.decorator';
-import { RequestLoggingInterceptor } from '../logging/request-logging.interceptor';
+import { RequestLogContext } from '../request-log/request-log.decorator';
+import { RequestLoggingInterceptor } from '../request-log/request-logging.interceptor';
 import { EarthquakeListResponse, EarthquakeQuery } from './earthquake.dto';
 import { EarthquakeFeature } from './earthquake.model';
 import { EarthquakeService } from './earthquake.service';
@@ -22,10 +21,7 @@ import { EarthquakeService } from './earthquake.service';
 @Controller('earthquakes')
 @ApiTags('Earthquakes')
 export class EarthquakeController {
-  constructor(
-    private readonly earthquakeService: EarthquakeService,
-    private readonly requestLogService: RequestLogService,
-  ) {}
+  constructor(private readonly earthquakeService: EarthquakeService) {}
 
   @Post('ingest')
   @UseInterceptors(RequestLoggingInterceptor)

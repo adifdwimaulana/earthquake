@@ -328,8 +328,8 @@ export class EarthquakeService {
     // ========== Helper Methods ==========
     const addTimeRange = () => {
       if (hasTimeRange) {
-        const startMillis = new Date(startTime).getTime();
-        const endMillis = new Date(endTime).getTime();
+        const startMillis = startTime.getTime();
+        const endMillis = endTime.getTime();
 
         keyConds.push('#time BETWEEN :startTime AND :endTime');
         exprNames['#time'] = 'time';

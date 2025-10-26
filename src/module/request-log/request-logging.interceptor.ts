@@ -7,8 +7,10 @@ import {
 import { Reflector } from '@nestjs/core';
 import type { Request, Response } from 'express';
 import { catchError, tap, throwError } from 'rxjs';
-import { RequestLogService } from './request-log.service';
 import { REQUEST_LOG_CONTEXT } from './request-log.decorator';
+import { BaseRequestLog } from './request-log.model';
+import { RequestLogService } from './request-log.service';
+import { transformBaseRequestLogToRecord } from './request-log.transformer';
 
 @Injectable()
 export class RequestLoggingInterceptor implements NestInterceptor {
@@ -21,7 +23,7 @@ export class RequestLoggingInterceptor implements NestInterceptor {
     const httpContext = context.switchToHttp();
     const request = httpContext.getRequest<Request>();
     const response = httpContext.getResponse<Response>();
-    const startedAt = Date.now();
+    const time = Date.now();
 
     const route = request.route as { path?: string } | undefined;
     const routePath = typeof route?.path === 'string' ? route.path : undefined;
@@ -30,50 +32,30 @@ export class RequestLoggingInterceptor implements NestInterceptor {
       routePath ??
       request.url;
 
-    const baseLogPayload = {
+    const baseLogPayload: BaseRequestLog = {
       endpoint,
       method: request.method,
-      timestamp: startedAt,
-      ip: request.ip,
+      time,
       query: request.query as Record<string, unknown>,
       body: request.body as Record<string, unknown>,
       params: request.params as Record<string, unknown>,
       headers: this.pickRelevantHeaders(request.headers),
+      statusCode: response.statusCode,
     };
 
     return next.handle().pipe(
-      tap((result: unknown) => {
-        const duration = Date.now() - startedAt;
-        void this.requestLogService.createLog({
-          ...baseLogPayload,
-          statusCode: response.statusCode,
-          durationMs: duration,
-          responseMetadata: this.buildResponseMetadata(result),
-          metadata: {
-            durationMs: duration,
-            userAgent: request.headers['user-agent'] ?? null,
-          },
-        });
+      tap(() => {
+        const record = transformBaseRequestLogToRecord(baseLogPayload);
+        void this.requestLogService.ingestLog(record);
       }),
       catchError((error: unknown) => {
-        const duration = Date.now() - startedAt;
         const statusCode = this.extractStatusCode(error);
+        const record = transformBaseRequestLogToRecord({
+          ...baseLogPayload,
+          statusCode,
+        });
 
-        void this.requestLogService
-          .createLog({
-            ...baseLogPayload,
-            statusCode,
-            durationMs: duration,
-            responseMetadata: {
-              error: this.extractErrorMessage(error),
-            },
-            metadata: {
-              durationMs: duration,
-              userAgent: request.headers['user-agent'] ?? null,
-            },
-          })
-          .catch(() => undefined);
-
+        void this.requestLogService.ingestLog(record);
         return throwError(() => error);
       }),
     );

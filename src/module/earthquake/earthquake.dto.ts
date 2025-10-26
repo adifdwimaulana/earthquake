@@ -3,8 +3,7 @@ import { ApiProperty } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
   IsBoolean,
-  IsDateString,
-  IsDecimal,
+  IsDate,
   IsIn,
   IsNumber,
   IsOptional,
@@ -36,7 +35,7 @@ export class EarthquakeQuery {
     example: '2025-01-01T00:00:00Z',
   })
   @IsOptional()
-  @IsDateString()
+  @IsDate()
   startTime: Date;
 
   @ApiProperty({
@@ -46,7 +45,7 @@ export class EarthquakeQuery {
     default: new Date().toISOString(),
   })
   @IsOptional()
-  @IsDateString()
+  @IsDate()
   endTime: Date;
 
   @ApiProperty({
@@ -55,7 +54,7 @@ export class EarthquakeQuery {
     example: 5.0,
   })
   @IsOptional()
-  @IsDecimal()
+  @IsNumber()
   minMagnitude: number;
 
   @ApiProperty({
@@ -64,7 +63,7 @@ export class EarthquakeQuery {
     example: 7.0,
   })
   @IsOptional()
-  @IsDecimal()
+  @IsNumber()
   maxMagnitude: number;
 
   @ApiProperty({

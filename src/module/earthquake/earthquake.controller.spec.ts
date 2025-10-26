@@ -1,7 +1,7 @@
+import { RequestLogService } from '@/module/request-log/request-log.service';
 import { Test, type TestingModule } from '@nestjs/testing';
 import { EarthquakeController } from './earthquake.controller';
 import { EarthquakeService } from './earthquake.service';
-import { RequestLogService } from '@/module/logging/request-log.service';
 
 describe('EarthquakeController', () => {
   let controller: EarthquakeController;

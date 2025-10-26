@@ -6,6 +6,10 @@ export function dateToTimestamp(date: Date): number {
   return date.getTime();
 }
 
+export function dateToISODateString(date: Date): string {
+  return date.toISOString().split('T')[0];
+}
+
 export function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }

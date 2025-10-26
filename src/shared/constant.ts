@@ -1,4 +1,4 @@
-const EARTHQUAKE_FEATURE = {
+export const EARTHQUAKE_FEATURE = {
   type: 'Feature',
   properties: {
     mag: 5.2,
@@ -36,10 +36,10 @@ const EARTHQUAKE_FEATURE = {
   id: 'us6000rjf6',
 };
 
-const NEXT_TOKEN =
+export const NEXT_TOKEN =
   'eyJldmVudElkIjoidXM2MDAwcmpldiIsIm1hZ1NjYWxlZCI6NDUwMCwiZ2xvYmFsTWFnIjoiR0xPQkFMI01BR05JVFVERSJ9';
 
-const ALLOWED_FILTERS: string[] = [
+export const ALLOWED_FILTERS: string[] = [
   'startTime,endTime',
   'minMagnitude,maxMagnitude',
   'location,minMagnitude,maxMagnitude',
@@ -48,4 +48,13 @@ const ALLOWED_FILTERS: string[] = [
   'isTsunami,startTime,endTime',
 ];
 
-export { ALLOWED_FILTERS, EARTHQUAKE_FEATURE, NEXT_TOKEN };
+export const REQUEST_COUNT_BY_ENDPOINT = [
+  {
+    endpoint: '/earthquakes',
+    total: 200,
+  },
+  {
+    endpoint: '/earthquakes/:eventId',
+    total: 15,
+  },
+];

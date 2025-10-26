@@ -1,5 +1,5 @@
 import { DynamoDbProvider } from '@/module/dynamo/dynamo.provider';
-import { RequestLogModule } from '@/module/logging/request-log.module';
+import { RequestLogModule } from '@/module/request-log/request-log.module';
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { EarthquakeController } from './earthquake.controller';
