@@ -95,8 +95,11 @@ The **Earthquake API** relies on the official **USGS Earthquake feed** to keep a
 ### Design Consideration
 
 - **Global Secondary Indexes (GSIs)** enable flexible query combinations such as:
-  - Fetching by `region` + `magnitude`
-  - Fetching by `tsunami` + `time`
+  - Fetching by `time`
+  - Fetching by `location` + `magnitude`
+  - Fetching by `magnitude`
+  - Fetching by `location`
+  - Fetching by `isTsunami` + `time`
 - **Composite keys** (e.g., `location#magnitude`) minimize query cost and allow precise access patterns.  
 - **Day/Month buckets** in log table enable **time-based analytics** such as total requests, response latency distribution, and endpoint popularity.
 
