@@ -35,6 +35,10 @@ This project is **fully containerized** to ensure consistency across environment
    pnpm install
    ```
 
+   ```bash
+   cd cdk && npm install
+   ```
+
 4. Start the containers:
    ```bash
    docker compose up
@@ -45,7 +49,7 @@ This project is **fully containerized** to ensure consistency across environment
    - Swagger (OpenAPI) Docs → [http://localhost:3000/api](http://localhost:3000/api)
 
 6. (Optional) Test with Postman:
-   Import the provided `postman_collection.json`.
+   Import the provided `postman_collection.json` or use Swagger Docs.
 
 ---
 
