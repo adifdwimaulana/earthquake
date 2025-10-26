@@ -58,3 +58,22 @@ export const REQUEST_COUNT_BY_ENDPOINT = [
     total: 15,
   },
 ];
+
+export const BASE_REQUEST_LOG = {
+  endpoint: '/earthquakes',
+  method: 'GET',
+  time: 1625247600000,
+  query: {},
+  params: {},
+  body: {},
+  headers: {},
+  statusCode: 200,
+};
+
+export const REQUEST_LOG_RECORD = {
+  ...BASE_REQUEST_LOG,
+  requestLogId: '8888-aaaa-bbbb-cccc-ffffffffffff',
+  responseMs: 123,
+  dayBucket: '2021-07-02',
+  monthBucket: '2021-07',
+};
