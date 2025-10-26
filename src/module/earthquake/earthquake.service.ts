@@ -21,6 +21,7 @@ import {
   Injectable,
   InternalServerErrorException,
   Logger,
+  NotFoundException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Cron, CronExpression } from '@nestjs/schedule';
@@ -426,6 +427,32 @@ export class EarthquakeService {
       return new EarthquakeListResponse([], 0);
     } catch (error) {
       this.logger.error('Failed to query earthquake data', error);
+      throw error;
+    }
+  }
+
+  public async getByEventId(eventId: string): Promise<EarthquakeFeature> {
+    try {
+      const command = new QueryCommand({
+        TableName: this.EARTHQUAKE_TABLE,
+        KeyConditionExpression: 'eventId = :eventId',
+        ExpressionAttributeValues: {
+          ':eventId': eventId,
+        },
+      });
+
+      const { Items } = await this.db.send(command);
+
+      if (Items && Items.length > 0) {
+        return transformRecordToFeature(Items[0] as EarthquakeRecord);
+      }
+
+      throw new NotFoundException(`Earthquake not found: ${eventId}`);
+    } catch (error) {
+      this.logger.error(
+        `Failed to get earthquake by eventId: ${eventId}`,
+        error,
+      );
       throw error;
     }
   }

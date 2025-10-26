@@ -1,10 +1,13 @@
 import { RequestLogService } from '@/module/logging/request-log.service';
+import { ALLOWED_FILTERS, EARTHQUAKE_FEATURE } from '@/shared/constant';
 import { ForbiddenFilterException } from '@/shared/exception';
 import { MessageResponse } from '@/shared/model';
 import {
   Controller,
   Get,
   HttpStatus,
+  NotFoundException,
+  Param,
   Post,
   Query,
   UseInterceptors,
@@ -13,6 +16,7 @@ import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { RequestLogContext } from '../logging/request-log.decorator';
 import { RequestLoggingInterceptor } from '../logging/request-logging.interceptor';
 import { EarthquakeListResponse, EarthquakeQuery } from './earthquake.dto';
+import { EarthquakeFeature } from './earthquake.model';
 import { EarthquakeService } from './earthquake.service';
 
 @Controller('earthquakes')
@@ -48,10 +52,42 @@ export class EarthquakeController {
     status: HttpStatus.BAD_REQUEST,
     description: 'Invalid query parameters',
     type: ForbiddenFilterException,
+    example: {
+      statusCode: 400,
+      error: 'Bad Request',
+      message: 'Invalid filters provided',
+      allowedFilters: ALLOWED_FILTERS,
+    },
   })
   async getEarthquakes(
     @Query() query: EarthquakeQuery,
   ): Promise<EarthquakeListResponse> {
     return await this.earthquakeService.getEarthquakes(query);
+  }
+
+  @Get('/:eventId')
+  @UseInterceptors(RequestLoggingInterceptor)
+  @RequestLogContext('/earthquakes/:eventId')
+  @ApiOperation({ summary: 'Get earthquake details by event ID' })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Earthquake details',
+    type: EarthquakeFeature,
+    example: EARTHQUAKE_FEATURE,
+  })
+  @ApiResponse({
+    status: HttpStatus.NOT_FOUND,
+    description: 'Earthquake not found',
+    type: NotFoundException,
+    example: {
+      statusCode: 404,
+      message: 'Earthquake with eventId 12345 not found',
+      error: 'Not Found',
+    },
+  })
+  async getByEventId(
+    @Param('eventId') eventId: string,
+  ): Promise<EarthquakeFeature> {
+    return await this.earthquakeService.getByEventId(eventId);
   }
 }

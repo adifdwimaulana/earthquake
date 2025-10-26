@@ -1,13 +1,13 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
+import { DYNAMODB_CLIENT } from '@/module/dynamo/dynamo.provider';
 import {
   DynamoDBDocumentClient,
   PutCommand,
   QueryCommand,
   QueryCommandInput,
 } from '@aws-sdk/lib-dynamodb';
+import { Inject, Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { randomUUID } from 'node:crypto';
-import { DYNAMODB_CLIENT } from '@/module/dynamo/dynamo.provider';
 import type {
   CreateRequestLogInput,
   RequestMetricsFilters,
@@ -23,8 +23,7 @@ export class RequestLogService {
     @Inject(DYNAMODB_CLIENT) private readonly dynamo: DynamoDBDocumentClient,
     private readonly configService: ConfigService,
   ) {
-    this.tableName =
-      this.configService.get<string>('REQUEST_LOG_TABLE_NAME') ?? 'Metadata';
+    this.tableName = this.configService.get<string>('LOG_TABLE_NAME') || 'log';
   }
 
   async createLog(input: CreateRequestLogInput): Promise<void> {
@@ -34,6 +33,7 @@ export class RequestLogService {
     const command = new PutCommand({
       TableName: this.tableName,
       Item: {
+        eventId: randomUUID(),
         pk: endpointKey,
         sk: timestampIso,
         id: randomUUID(),
